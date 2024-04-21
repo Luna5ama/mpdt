@@ -1,8 +1,8 @@
-# doibq
+# mpdt
 
-**DOI** **B**atch **Q**uery
+**M**ass **P**aper **D**ownload **T**ool
 
-Batch doi query by title, author, etc.
+Downloading massive amounts of paper by their DOI link or title + author using multiple APIs.
 
 # CLI Usage
-`python -m doibq <path to .csv file> [<query type:csv column>]...`
+`python -m mpdt <path to .csv file> <path to pdf output directory> [<query type:csv column>]...`
