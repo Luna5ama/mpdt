@@ -1,32 +1,129 @@
+import concurrent.futures
+import multiprocessing.pool
+import os
 import pathlib
 import csv
 import argparse
+import sys
+import time
 
-from typing import Dict
+import requests
+import pypdf
+
+from typing import Dict, List
+from unpywall import Unpywall
+from requests_html import HTMLSession
+
+spoofed_headers = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36"
+}
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
-def download(input_csv: pathlib.Path, output_dir: pathlib.Path, keys: Dict[str, str]):
-    csv_dicts = []
-    with open(input_csv) as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            csv_dicts.append(row)
+def validate_pdf(file_path):
+    valid = True
+    try:
+        pypdf.PdfReader(file_path, strict=False)
+    except FileNotFoundError:
+        valid = False
+    except:
+        os.remove(file_path)
+        valid = False
+    return valid
 
-    print(csv_dicts)
+
+class Downloader:
+    def __init__(self, input_csv: pathlib.Path, output_dir: pathlib.Path, keys: Dict[str, str]):
+        self.input_csv = input_csv
+        self.output_dir = output_dir
+        self.keys = keys
+
+    def download_by_doi(self, paper_id: int, doi: str) -> bool:
+        print(f'Downloading Paper# {paper_id}...')
+        pdf_link = Unpywall.get_pdf_link(doi=doi)
+        if pdf_link is None:
+            eprint(f'Pdf link for Paper# {paper_id} is not available')
+            return False
+
+        response = requests.get(pdf_link, allow_redirects=True, timeout=15, headers=spoofed_headers)
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as http_error:
+            eprint(f"HTTPError while requesting pdf for Paper# {paper_id}", http_error)
+            return False
+
+        file_path = self.output_dir / f'{paper_id}.pdf'
+
+        # Save pdf
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+
+        if not validate_pdf(file_path):
+            eprint(f'Paper# {paper_id} from {doi} is corrupted')
+            return False
+
+        return True
+
+    def download_by_title_authors(self, paper_id: int, title: str, authors: str):
+        request_url = f'https://api.crossref.org/works?query.title={title}&query.author={authors}&select=DOI'
+        response = requests.get(request_url)
+        response.raise_for_status()
+        doi = response.json()['message']['items'][0]['DOI']
+        return self.download_by_doi(paper_id, doi)
+
+    def download(self):
+        csv_dicts: List[Dict[str, str]] = []
+        with open(self.input_csv, encoding='UTF-8') as csvfile:
+            reader = csv.DictReader(csvfile, delimiter=self.keys['delim'])
+            for row in reader:
+                csv_dicts.append(row)
+
+        for i, stuff in enumerate(csv_dicts):
+            if validate_pdf(self.output_dir / f'{i}.pdf'):
+                print(f'Paper# {i} already exists, skipping...')
+                continue
+
+            if 'doi' in self.keys:
+                key_doi = self.keys['doi']
+                self.download_by_doi(i, stuff[key_doi])
+            else:
+                key_title = self.keys['title']
+                key_authors = self.keys['authors']
+                self.download_by_title_authors(i, stuff[key_title], stuff[key_authors])
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download papers from a CSV file")
-    parser.add_argument("input_csv", type=pathlib.Path, help="Path to the input CSV file")
-    parser.add_argument("output_dir", type=pathlib.Path, help="Path to the output directory")
-    parser.add_argument("--title", required=False, type=str, help="Title key in the CSV file")
-    parser.add_argument("--authors", required=False, type=str, help="Authors key in the CSV file")
-    parser.add_argument("--doi", required=False, type=str, help="DOI key in the CSV file")
+    parser = argparse.ArgumentParser(description='Download papers from a CSV file')
+    parser.add_argument('input_csv', type=pathlib.Path, help='Path to the input CSV file')
+    parser.add_argument('output_dir', type=pathlib.Path, help='Path to the output directory')
+    parser.add_argument('--delim', required=False, type=str, help='Delimiter for the CSV file', default=',')
+    parser.add_argument('--title', required=False, type=str, help='Title key in the CSV file')
+    parser.add_argument('--authors', required=False, type=str, help='Authors key in the CSV file')
+    parser.add_argument('--doi', required=False, type=str, help='DOI key in the CSV file')
 
     args = parser.parse_args()
 
-    download(args.input_csv, args.output_dir, {"doi": args.title, "authors": args.authors, "title": args.doi})
+    keys = {'delim': args.delim}
+
+    if args.doi is None:
+        if args.title is None or args.authors is None:
+            eprint('Please provide either a --doi or both --title and --authors')
+            sys.exit(1)
+        else:
+            keys['title'] = args.title
+            keys['authors'] = args.authors
+    else:
+        keys['doi'] = args.doi
+
+    input_path = pathlib.Path(args.input_csv)
+    output_path = pathlib.Path(args.output_dir)
+
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    Downloader(input_path, output_path, keys).download()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
