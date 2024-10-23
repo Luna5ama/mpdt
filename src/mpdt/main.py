@@ -36,10 +36,11 @@ def validate_pdf(file_path):
 
 
 class Downloader:
-    def __init__(self, input_csv: pathlib.Path, output_dir: pathlib.Path, keys: Dict[str, str]):
+    def __init__(self, input_csv: pathlib.Path, output_dir: pathlib.Path, keys: Dict[str, str], verbose: bool):
         self.input_csv = input_csv
         self.output_dir = output_dir
         self.keys = keys
+        self.verbose = verbose
 
     def download_by_doi(self, paper_id: int, doi: str) -> bool:
         pdf_link = Unpywall.get_pdf_link(doi=doi)
@@ -64,7 +65,8 @@ class Downloader:
             eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Paper pdf is corrupted')
             return False
 
-        print(f"[INFO] <{paper_id}> Downloaded paper pdf")
+        if self.verbose:
+            print(f"[INFO] <{paper_id}> Downloaded paper pdf")
         return True
 
     def download(self):
@@ -80,7 +82,8 @@ class Downloader:
                 paper_id = int(stuff[self.keys['id']])
 
             if validate_pdf(self.output_dir / f'{paper_id}.pdf'):
-                print(f'[INFO] <{paper_id}> Pdf already exists, skipping...')
+                if self.verbose:
+                    print(f'[INFO] <{paper_id}> Pdf already exists, skipping...')
                 continue
 
             doi = None
@@ -121,6 +124,7 @@ def main():
     parser.add_argument('--authors', required=False, type=str, help='Authors key in the CSV file')
     parser.add_argument('--doi', required=False, type=str, help='DOI key in the CSV file')
     parser.add_argument('--email', required=True, type=str, help='Email for Unpywall API')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Verbose log')
 
     args = parser.parse_args()
 
@@ -146,7 +150,7 @@ def main():
 
     output_path.mkdir(parents=True, exist_ok=True)
 
-    Downloader(input_path, output_path, keys).download()
+    Downloader(input_path, output_path, keys, args.verbose).download()
 
 
 if __name__ == '__main__':
