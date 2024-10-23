@@ -41,7 +41,6 @@ class Downloader:
         self.keys = keys
 
     def download_by_doi(self, paper_id: int, doi: str) -> bool:
-        print(f'Downloading Paper# {paper_id}...')
         pdf_link = Unpywall.get_pdf_link(doi=doi)
         if pdf_link is None:
             eprint(f'Pdf link for Paper# {paper_id} is not available')
@@ -64,6 +63,7 @@ class Downloader:
             eprint(f'Paper# {paper_id} from {doi} is corrupted')
             return False
 
+        print(f"Downloaded Paper# {paper_id}")
         return True
 
     def download_by_title_authors(self, paper_id: int, title: str, authors: str):
@@ -85,13 +85,17 @@ class Downloader:
                 print(f'Paper# {i} already exists, skipping...')
                 continue
 
-            if 'doi' in self.keys:
-                key_doi = self.keys['doi']
-                self.download_by_doi(i, stuff[key_doi])
-            else:
-                key_title = self.keys['title']
-                key_authors = self.keys['authors']
-                self.download_by_title_authors(i, stuff[key_title], stuff[key_authors])
+            try:
+                if 'doi' in self.keys:
+                    key_doi = self.keys['doi']
+                    self.download_by_doi(i, stuff[key_doi])
+                else:
+                    key_title = self.keys['title']
+                    key_authors = self.keys['authors']
+                    self.download_by_title_authors(i, stuff[key_title], stuff[key_authors])
+            except:
+                eprint(f'Error downloading Paper# {i}')
+                continue
 
 
 def main():
