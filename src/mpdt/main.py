@@ -83,6 +83,9 @@ class Downloader:
 
         for i, stuff in enumerate(csv_dicts):
             paper_id = i + 1
+            if 'id' in self.keys:
+                paper_id = int(stuff[self.keys['id']])
+
             if validate_pdf(self.output_dir / f'{paper_id}.pdf'):
                 print(f'Paper# {paper_id} already exists, skipping...')
                 continue
@@ -108,6 +111,7 @@ def main():
     parser.add_argument('input_csv', type=pathlib.Path, help='Path to the input CSV file')
     parser.add_argument('output_dir', type=pathlib.Path, help='Path to the output directory')
     parser.add_argument('--delim', required=False, type=str, help='Delimiter for the CSV file', default=',')
+    parser.add_argument('--id', required=False, type=str, help='ID key in the CSV file', default=',')
     parser.add_argument('--title', required=False, type=str, help='Title key in the CSV file')
     parser.add_argument('--authors', required=False, type=str, help='Authors key in the CSV file')
     parser.add_argument('--doi', required=False, type=str, help='DOI key in the CSV file')
@@ -128,6 +132,9 @@ def main():
             keys['authors'] = args.authors
     else:
         keys['doi'] = args.doi
+
+    if args.id is not None:
+        keys['id'] = args.id
 
     input_path = pathlib.Path(args.input_csv)
     output_path = pathlib.Path(args.output_dir)
