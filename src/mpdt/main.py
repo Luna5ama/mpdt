@@ -13,6 +13,7 @@ import pypdf
 from typing import Dict, List
 from unpywall import Unpywall
 from requests_html import HTMLSession
+from unpywall.utils import UnpywallCredentials
 
 spoofed_headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.102 Safari/537.36"
@@ -93,8 +94,11 @@ class Downloader:
                     key_title = self.keys['title']
                     key_authors = self.keys['authors']
                     self.download_by_title_authors(i, stuff[key_title], stuff[key_authors])
-            except:
-                eprint(f'Error downloading Paper# {i}')
+            except KeyboardInterrupt:
+                eprint(f'Interrupted by user')
+                sys.exit(1)
+            except Exception as e:
+                eprint(f'Error downloading Paper# {i}', e)
                 continue
 
 
@@ -106,8 +110,11 @@ def main():
     parser.add_argument('--title', required=False, type=str, help='Title key in the CSV file')
     parser.add_argument('--authors', required=False, type=str, help='Authors key in the CSV file')
     parser.add_argument('--doi', required=False, type=str, help='DOI key in the CSV file')
+    parser.add_argument('--email', required=True, type=str, help='Email for Unpywall API')
 
     args = parser.parse_args()
+
+    os.environ['UNPAYWALL_EMAIL'] = args.email
 
     keys = {'delim': args.delim}
 
