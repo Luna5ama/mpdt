@@ -44,14 +44,14 @@ class Downloader:
     def download_by_doi(self, paper_id: int, doi: str) -> bool:
         pdf_link = Unpywall.get_pdf_link(doi=doi)
         if pdf_link is None:
-            eprint(f'Pdf link for Paper# {paper_id} is not available')
+            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Pdf link is not available')
             return False
 
         response = requests.get(pdf_link, allow_redirects=True, timeout=15, headers=spoofed_headers)
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as http_error:
-            eprint(f"HTTPError while requesting pdf for Paper# {paper_id}", http_error)
+            eprint(f"[Error] <{paper_id}>(https://doi.org/{doi}) HTTPError while requesting\n", http_error)
             return False
 
         file_path = self.output_dir / f'{paper_id}.pdf'
@@ -61,18 +61,11 @@ class Downloader:
             f.write(response.content)
 
         if not validate_pdf(file_path):
-            eprint(f'Paper# {paper_id} from {doi} is corrupted')
+            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Paper pdf is corrupted')
             return False
 
-        print(f"Downloaded Paper# {paper_id}")
+        print(f"[INFO] <{paper_id}> Downloaded paper pdf")
         return True
-
-    def download_by_title_authors(self, paper_id: int, title: str, authors: str):
-        request_url = f'https://api.crossref.org/works?query.title={title}&query.author={authors}&select=DOI'
-        response = requests.get(request_url)
-        response.raise_for_status()
-        doi = response.json()['message']['items'][0]['DOI']
-        return self.download_by_doi(paper_id, doi)
 
     def download(self):
         csv_dicts: List[Dict[str, str]] = []
@@ -87,22 +80,34 @@ class Downloader:
                 paper_id = int(stuff[self.keys['id']])
 
             if validate_pdf(self.output_dir / f'{paper_id}.pdf'):
-                print(f'Paper# {paper_id} already exists, skipping...')
+                print(f'[INFO] <{paper_id}> Pdf already exists, skipping...')
                 continue
+
+            doi = None
 
             try:
                 if 'doi' in self.keys:
                     key_doi = self.keys['doi']
-                    self.download_by_doi(paper_id, stuff[key_doi])
+                    doi = stuff[key_doi]
+                    self.download_by_doi(paper_id, doi)
                 else:
                     key_title = self.keys['title']
                     key_authors = self.keys['authors']
-                    self.download_by_title_authors(paper_id, stuff[key_title], stuff[key_authors])
+
+                    title = stuff[key_title]
+                    authors = stuff[key_authors]
+
+                    request_url = f'https://api.crossref.org/works?query.title={stuff[key_title]}&query.author={stuff[key_authors]}&select=DOI'
+                    response = requests.get(request_url)
+                    response.raise_for_status()
+                    doi = response.json()['message']['items'][0]['DOI']
+
+                    self.download_by_doi(paper_id, doi)
             except KeyboardInterrupt:
                 eprint(f'Interrupted by user')
                 sys.exit(1)
             except Exception as e:
-                eprint(f'Error downloading Paper# {paper_id}', e)
+                eprint(f'[Error] <{paper_id}>(https://doi.org/{doi})\n', e)
                 continue
 
 
