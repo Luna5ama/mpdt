@@ -82,23 +82,24 @@ class Downloader:
                 csv_dicts.append(row)
 
         for i, stuff in enumerate(csv_dicts):
-            if validate_pdf(self.output_dir / f'{i}.pdf'):
-                print(f'Paper# {i} already exists, skipping...')
+            paper_id = i + 1
+            if validate_pdf(self.output_dir / f'{paper_id}.pdf'):
+                print(f'Paper# {paper_id} already exists, skipping...')
                 continue
 
             try:
                 if 'doi' in self.keys:
                     key_doi = self.keys['doi']
-                    self.download_by_doi(i, stuff[key_doi])
+                    self.download_by_doi(paper_id, stuff[key_doi])
                 else:
                     key_title = self.keys['title']
                     key_authors = self.keys['authors']
-                    self.download_by_title_authors(i, stuff[key_title], stuff[key_authors])
+                    self.download_by_title_authors(paper_id, stuff[key_title], stuff[key_authors])
             except KeyboardInterrupt:
                 eprint(f'Interrupted by user')
                 sys.exit(1)
             except Exception as e:
-                eprint(f'Error downloading Paper# {i}', e)
+                eprint(f'Error downloading Paper# {paper_id}', e)
                 continue
 
 
