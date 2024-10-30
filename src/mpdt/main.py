@@ -42,17 +42,14 @@ class Downloader:
         self.keys = keys
         self.verbose = verbose
 
-    def download_by_doi(self, paper_id: int, doi: str) -> bool:
-        pdf_link = Unpywall.get_pdf_link(doi=doi)
+    def download_pdf(self, paper_id: int, pdf_link: str) -> bool:
         if pdf_link is None:
-            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Pdf link is not available')
             return False
 
         response = requests.get(pdf_link, allow_redirects=True, timeout=15, headers=spoofed_headers)
         try:
             response.raise_for_status()
         except requests.exceptions.HTTPError as http_error:
-            eprint(f"[Error] <{paper_id}>(https://doi.org/{doi}) HTTPError while requesting\n", http_error)
             return False
 
         file_path = self.output_dir / f'{paper_id}.pdf'
@@ -62,7 +59,33 @@ class Downloader:
             f.write(response.content)
 
         if not validate_pdf(file_path):
-            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Paper pdf is corrupted')
+            return False
+
+        return True
+
+    def download_by_doi(self, paper_id: int, doi: str) -> bool:
+        unpaywall_result = Unpywall.get_json(doi=doi)
+        if unpaywall_result is None:
+            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Unpaywall API returned None')
+            return False
+
+        best_oa_location = unpaywall_result.get('best_oa_location', None)
+
+        if best_oa_location is None:
+            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Pdf link is not available')
+            return False
+
+        done = self.download_pdf(paper_id, best_oa_location['url_for_pdf'])
+
+        if not done:
+            # Try other OA locations
+            for loc in unpaywall_result['oa_locations']:
+                done = self.download_pdf(paper_id, loc['url_for_pdf'])
+                if done:
+                    break
+
+        if not done:
+            eprint(f'[Error] <{paper_id}>(https://doi.org/{doi}) Could not download pdf')
             return False
 
         if self.verbose:
